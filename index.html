@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Datahaven: Doorlight Protocol</title>
+<style>
+  body {
+    margin: 0;
+    background: radial-gradient(circle at 50% 20%, #0d1a2e, #050914 80%);
+    font-family: "Segoe UI", sans-serif;
+    color: #bff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  /* 🌌 Dynamic background animation */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(120deg, rgba(0, 255, 180, 0.05), rgba(0, 120, 255, 0.05), rgba(255, 255, 255, 0.02));
+    background-size: 300% 300%;
+    animation: moveBg 12s ease infinite;
+    z-index: -2;
+  }
+  @keyframes moveBg {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  .particle {
+    position: fixed;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: rgba(0,255,200,0.5);
+    box-shadow: 0 0 8px rgba(0,255,200,0.8);
+    animation: floatUp 8s linear infinite;
+  }
+  @keyframes floatUp {
+    0% { transform: translateY(100vh) scale(0.6); opacity: 0; }
+    50% { opacity: 1; }
+    100% { transform: translateY(-10vh) scale(1); opacity: 0; }
+  }
+
+  header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 2rem;
+    background: rgba(10,20,40,0.9);
+    padding: 10px 25px;
+    border-radius: 0 0 16px 16px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+    backdrop-filter: blur(6px);
+    position: relative;
+    width: fit-content;
+  }
+
+  #logoDH {
+    position: absolute;
+    left: -80px;
+    top: 6px;
+    width: 60px;
+    height: 60px;
+    cursor: pointer;
+    filter: drop-shadow(0 0 6px cyan);
+    transition: transform 0.8s ease, filter 0.3s ease;
+  }
+  #logoDH:hover {
+    transform: rotate(360deg) scale(1.1);
+    filter: drop-shadow(0 0 12px #00ffe5);
+  }
+
+  #mazeContainer {
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 0 25px rgba(0,255,200,0.3);
+    transition: box-shadow 0.3s;
+  }
+  #mazeContainer.active {
+    box-shadow: 0 0 40px rgba(255,255,160,0.8);
+  }
+
+  canvas {
+    display: block;
+    background: #111;
+    image-rendering: pixelated;
+  }
+
+  button {
+    background: linear-gradient(90deg,#00e0a8,#0074ff);
+    border: none;
+    color: #fff;
+    padding: 8px 18px;
+    font-weight: bold;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(0,255,255,0.4);
+    transition: 0.2s;
+  }
+  button:hover { transform: scale(1.05); box-shadow: 0 0 20px rgba(0,255,255,0.8); }
+
+  #msgBox {
+    position: absolute;
+    top: 45%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.7);
+    padding: 18px 28px;
+    border-radius: 10px;
+    font-size: 17px;
+    color: #9fffd7;
+    display: none;
+    box-shadow: 0 0 15px rgba(0,255,200,0.3);
+  }
+
+  #radar {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    border-radius: 50%;
+    width: 100px;
+    height: 100px;
+    background: rgba(0,255,200,0.08);
+    border: 2px solid rgba(0,255,200,0.2);
+    overflow: hidden;
+  }
+
+  #energyBar {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    width: 100px;
+    height: 10px;
+    background: rgba(0,0,0,0.5);
+    border: 1px solid #0ff;
+    border-radius: 6px;
+  }
+  #energyFill {
+    height: 100%;
+    width: 100%;
+    background: linear-gradient(90deg,#00ffe5,#00bfff);
+    border-radius: 6px;
+    transition: width 0.2s;
+  }
+
+  #overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,10,0.85);
+    color: #bff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    backdrop-filter: blur(4px);
+    transition: opacity 0.8s;
+    z-index: 10;
+  }
+  #overlay.fade-out { opacity: 0; pointer-events: none; }
+  #overlay button { margin-top: 20px; }
+</style>
+</head>
+<body>
+<header>
+  <img id="logoDH" src="datahaven_logo.png" alt="Datahaven Logo" title="Datahaven Project">
+  <div>🧭 Level: <span id="level">1</span></div>
+  <div>⭐ Score: <span id="score">0</span></div>
+  <div>⏱️ Time: <span id="time">60</span>s</div>
+  <button id="newBtn">Restart</button>
+</header>
+
+<script>
+for(let i=0;i<25;i++){
+  const p=document.createElement("div");
+  p.className="particle";
+  p.style.left=Math.random()*100+"vw";
+  p.style.animationDelay=(Math.random()*8)+"s";
+  p.style.animationDuration=(6+Math.random()*6)+"s";
+  document.body.appendChild(p);
+}
+</script>
+
+<div id="mazeContainer">
+  <canvas id="maze" width="608" height="608"></canvas>
+  <div id="msgBox"></div>
+  <div id="energyBar"><div id="energyFill"></div></div>
+  <canvas id="radar"></canvas>
+  <div id="overlay">
+    <div id="overlayText">Datahaven: Doorlight Protocol</div>
+    <button id="startBtn">Start Adventure</button>
+  </div>
+</div>
+
+<script>
+const canvas=document.getElementById("maze"),ctx=canvas.getContext("2d");
+const radar=document.getElementById("radar"),rctx=radar.getContext("2d");
+let size=19,tile=canvas.width/size;
+let grid=[],player={x:0,y:0},key={x:0,y:0},door={x:0,y:0},acorns=[];
+let score=0,level=1,time=60,timer,hasKey=false,lightEffect=false;
+let energy=100,gameRunning=false;
+
+// Assets
+const imgs={},assets={wall:"wall_texture.png",floor:"floor_texture.png",mascot:"mascot.png",key:"key.png",door:"door.png",acorn:"acorn.png"};
+for(let k in assets){imgs[k]=new Image();imgs[k].src=assets[k];}
+
+// Sounds
+const s_click=new Audio("click.mp3"),s_pickup=new Audio("pickup.mp3"),s_door=new Audio("door_open.mp3"),s_bg=new Audio("bgm.mp3");
+s_bg.loop=true;s_bg.volume=0.25;
+
+// Utility
+function showMessage(msg,duration=1500){
+  const box=document.getElementById("msgBox");
+  box.innerHTML=msg;box.style.display="block";
+  setTimeout(()=>box.style.display="none",duration);
+}
+function randomEmptyCell(){
+  let x,y;do{x=Math.floor(Math.random()*size);y=Math.floor(Math.random()*size);}
+  while(grid[y][x]===1||(x===0&&y===0));return{x,y};
+}
+function generateMaze(){
+  const maze=Array(size).fill().map(()=>Array(size).fill(1));
+  const stack=[[0,0]];maze[0][0]=0;
+  const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+  while(stack.length){
+    const [x,y]=stack.pop();dirs.sort(()=>Math.random()-0.5);
+    for(let [dx,dy] of dirs){
+      const nx=x+dx*2,ny=y+dy*2;
+      if(nx>=0&&ny>=0&&nx<size&&ny<size&&maze[ny][nx]===1){
+        maze[y+dy][x+dx]=0;maze[ny][nx]=0;stack.push([nx,ny]);
+      }
+    }
+  }return maze;
+}
+function farthestCell(){
+  const visited=Array(size).fill().map(()=>Array(size).fill(false));
+  const q=[[0,0,0]];visited[0][0]=true;let farthest=[0,0];
+  while(q.length){
+    const [x,y,d]=q.shift();farthest=[x,y];
+    for(let [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=x+dx,ny=y+dy;
+      if(nx>=0&&ny>=0&&nx<size&&ny<size&&grid[ny][nx]===0&&!visited[ny][nx]){
+        visited[ny][nx]=true;q.push([nx,ny,d+1]);
+      }
+    }
+  }return{x:farthest[0],y:farthest[1]};
+}
+function placeItems(){
+  key=randomEmptyCell();door=farthestCell();
+  acorns=[];for(let i=0;i<5;i++)acorns.push(randomEmptyCell());
+  hasKey=false;
+}
+function drawMaze(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const lightRadius=4;
+  for(let y=0;y<size;y++){
+    for(let x=0;x<size;x++){
+      const px=x*tile,py=y*tile;
+      const dist=Math.abs(player.x-x)+Math.abs(player.y-y);
+      ctx.globalAlpha=dist<lightRadius?1:0.15;
+      ctx.drawImage(grid[y][x]===1?imgs.wall:imgs.floor,px,py,tile,tile);
+    }
+  }
+  ctx.globalAlpha=1;
+  for(const a of acorns)ctx.drawImage(imgs.acorn,a.x*tile,a.y*tile,tile,tile);
+  if(!hasKey)ctx.drawImage(imgs.key,key.x*tile,key.y*tile,tile,tile);
+  ctx.drawImage(imgs.door,door.x*tile,door.y*tile,tile,tile);
+  ctx.drawImage(imgs.mascot,player.x*tile,player.y*tile,tile,tile);
+  if(lightEffect){
+    const grad=ctx.createRadialGradient(door.x*tile+tile/2,door.y*tile+tile/2,10,door.x*tile+tile/2,door.y*tile+tile/2,280);
+    grad.addColorStop(0,"rgba(255,255,180,1)");
+    grad.addColorStop(0.3,"rgba(255,255,120,0.7)");
+    grad.addColorStop(1,"rgba(255,255,160,0)");
+    ctx.fillStyle=grad;ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+  drawRadar();
+}
+function drawRadar(){
+  const scale=radar.width/size;
+  rctx.clearRect(0,0,radar.width,radar.height);
+  rctx.save();rctx.translate(50,50);
+  const angle=(Date.now()/500)% (2*Math.PI);
+  rctx.rotate(angle);
+  rctx.strokeStyle="rgba(0,255,200,0.5)";
+  rctx.beginPath();rctx.moveTo(0,0);rctx.lineTo(50,0);rctx.stroke();
+  rctx.restore();
+  rctx.fillStyle="rgba(0,255,200,0.1)";
+  rctx.beginPath();rctx.arc(50,50,48,0,Math.PI*2);rctx.fill();
+  rctx.fillStyle="#0ff";
+  rctx.fillRect(player.x*scale,player.y*scale,3,3);
+  rctx.fillStyle="#ff0";if(!hasKey)rctx.fillRect(key.x*scale,key.y*scale,3,3);
+  rctx.fillStyle="#f00";rctx.fillRect(door.x*scale,door.y*scale,3,3);
+}
+function resetGame(){
+  size=Math.min(29,19+level*2);
+  tile=canvas.width/size;
+  grid=generateMaze();
+  player={x:0,y:0};placeItems();
+  time=Math.max(30,60-level*2);
+  energy=100;clearInterval(timer);
+  timer=setInterval(()=>{
+    time--;document.getElementById("time").textContent=time;
+    if(time<=0){clearInterval(timer);endGame("⏰ Time’s up!");}
+  },1000);
+  document.getElementById("level").textContent=level;
+  document.getElementById("score").textContent=score;
+  drawMaze();s_bg.play();
+}
+function move(dx,dy){
+  if(!gameRunning||energy<=0)return;
+  const nx=player.x+dx,ny=player.y+dy;
+  if(nx<0||ny<0||nx>=size||ny>=size||grid[ny][nx]===1)return;
+  player.x=nx;player.y=ny;
+  s_click.currentTime=0;s_click.play();
+  energy=Math.max(0,energy-0.5-level*0.1);
+  const bar=document.getElementById("energyFill");
+  bar.style.width=energy+"%";
+  if(energy<25)bar.style.background=(Math.floor(Date.now()/200)%2===0?"red":"linear-gradient(90deg,#00ffe5,#00bfff)");
+  for(let i=0;i<acorns.length;i++){
+    if(acorns[i].x===nx&&acorns[i].y===ny){
+      acorns.splice(i,1);
+      score+=5;energy=Math.min(100,energy+10);
+      s_pickup.play();showMessage("🥜 +5 Energy!");break;
+    }
+  }
+  if(!hasKey&&nx===key.x&&ny===key.y){
+    hasKey=true;score+=10;s_pickup.play();showMessage("🔑 Key Acquired!");
+  }
+  if(nx===door.x&&ny===door.y&&hasKey){
+    s_door.play();lightEffect=true;
+    document.getElementById("mazeContainer").classList.add("active");
+    drawMaze();showMessage("🚪 Door Unlocked!");
+    setTimeout(()=>{
+      lightEffect=false;
+      document.getElementById("mazeContainer").classList.remove("active");
+      level++;score+=20;resetGame();
+    },1200);return;
+  }
+  document.getElementById("score").textContent=score;
+  drawMaze();
+}
+function endGame(msg){
+  gameRunning=false;
+  showOverlay(`<div>${msg}</div><div>🏆 Level ${level} — Score ${score}</div>`);
+}
+function showOverlay(content){
+  const o=document.getElementById("overlay");
+  o.innerHTML=content+`<button onclick="startGame()">Play Again</button>`;
+  o.classList.remove("fade-out");
+}
+function startGame(){
+  const o=document.getElementById("overlay");
+  o.classList.add("fade-out");
+  setTimeout(()=>{gameRunning=true;level=1;score=0;resetGame();},800);
+}
+document.addEventListener("keydown",e=>{
+  if(e.key==="ArrowUp")move(0,-1);
+  if(e.key==="ArrowDown")move(0,1);
+  if(e.key==="ArrowLeft")move(-1,0);
+  if(e.key==="ArrowRight")move(1,0);
+});
+document.getElementById("newBtn").addEventListener("click",()=>{level=1;score=0;resetGame();});
+document.getElementById("startBtn").addEventListener("click",startGame);
+</script>
+</body>
+</html>
